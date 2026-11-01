@@ -6,7 +6,7 @@ import { transformSync } from 'esbuild'
 
 const controllerSource = readFileSync(new URL('../content/bulkimport.ts', import.meta.url), 'utf8')
 const importerSource = readFileSync(new URL('../content/folder-import.ts', import.meta.url), 'utf8')
-const markup = readFileSync(new URL('../content/bulkimport.xul', import.meta.url), 'utf8')
+const markup = readFileSync(new URL('../content/bulkimport.xhtml', import.meta.url), 'utf8')
 
 function createNode(tag = 'div') {
   return {
@@ -46,6 +46,8 @@ function dialogHarness() {
     confirmed: false,
   }
   const doc = {
+    listeners: new Map(),
+    addEventListener(name, handler) { this.listeners.set(name, handler) },
     getElementById(id) { return elements[id] },
     createElementNS(_namespace, tag) { return createNode(tag) },
   }
@@ -68,7 +70,7 @@ function types(elements) {
 
 test('one native dialog replaces the two prompt windows', () => {
   assert.match(importerSource, /openDialog\(/)
-  assert.match(importerSource, /content\/bulkimport\.xul/)
+  assert.match(importerSource, /content\/bulkimport\.xhtml/)
   assert.doesNotMatch(importerSource, /Services\.prompt\.(prompt|confirmCheck)\(/)
   assert.match(markup, /folder-import-include-subfolders/)
   assert.match(markup, /content\/bulkimport\.js/)

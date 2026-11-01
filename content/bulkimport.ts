@@ -60,6 +60,8 @@ function renderExtensions(): void {
 
 export function onLoad(): void { // eslint-disable-line @typescript-eslint/no-unused-vars
   params = (window as Window & { arguments: [ImportOptions] }).arguments[0]
+  document.addEventListener('dialogaccept', onAccept)
+  document.addEventListener('dialogcancel', onCancel)
   selected = new Map(params.allExtensions.map(ext => [ext, params.extensions.has(ext)]))
   const recurse = checkbox('folder-import-include-subfolders')
   includeSubfolders = params.includeSubfolders

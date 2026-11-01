@@ -313,7 +313,7 @@ export class $FolderImport {
 
       try {
         Zotero.getMainWindow().openDialog(
-          'chrome://zotero-folder-import/content/bulkimport.xul',
+          'chrome://zotero-folder-import/content/bulkimport.xhtml',
           '',
           'chrome,centerscreen,modal,resizable=no',
           options,

@@ -71,7 +71,7 @@ test('when checkbox is checked, nested PDFs are included exactly once', async ()
 })
 
 test('the import UI exposes one native dialog with a checkbox defaulting off', () => {
-  const markup = readFileSync(new URL('../content/bulkimport.xul', import.meta.url), 'utf8')
+  const markup = readFileSync(new URL('../content/bulkimport.xhtml', import.meta.url), 'utf8')
   assert.match(source, /openDialog\(/)
   assert.match(source, /includeSubfolders: false/)
   assert.match(markup, /id="folder-import-include-subfolders"/)
