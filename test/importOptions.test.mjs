@@ -52,13 +52,21 @@ function dialogHarness() {
     createElementNS(_namespace, tag) { return createNode(tag) },
   }
   const script = transformSync(controllerSource, { loader: 'ts', target: 'es2022', format: 'cjs' }).code
-  const context = { document: doc, window: { arguments: [params] }, module: { exports: {} }, exports: {} }
+  const fits = []
+  elements['folder-import-error'].hidden = true
+  const win = {
+    arguments: [params],
+    sizeToContent() {
+      fits.push({ types: elements['folder-import-extensions'].children.length, error: !elements['folder-import-error'].hidden })
+    },
+  }
+  const context = { document: doc, window: win, module: { exports: {} }, exports: {} }
   context.exports = context.module.exports
   vm.runInNewContext(script, context)
   for (const name of ['onLoad', 'onAccept', 'onCancel']) {
     context[name] = context.module.exports[name]
   }
-  return { elements, params, context }
+  return { elements, params, context, fits }
 }
 
 function types(elements) {
@@ -130,4 +138,38 @@ test('import without selected file types is blocked with inline explanation', ()
   assert.equal(event.prevented, true)
   assert.equal(params.confirmed, false)
   assert.equal(elements['folder-import-error'].hidden, false)
+})
+
+
+test('the window fits the complete grid after subfolders add a second row', () => {
+  const { elements, context, params, fits } = dialogHarness()
+  params.allExtensions = ['docx', 'md', 'pdf', 'png', 'pptx']
+  params.rootExtensions = ['pdf']
+  params.extensions = new Set(params.allExtensions)
+  context.onLoad()
+  const before = fits.length
+  const recurse = elements['folder-import-include-subfolders']
+  recurse.checked = true
+  recurse.fire('change')
+  assert.equal(types(elements).length, 5)
+  assert.ok(fits.length > before, 'new content must refit the native window')
+  assert.equal(fits.at(-1).types, 5, 'measure after all five options are inserted')
+  recurse.checked = false
+  recurse.fire('change')
+  assert.equal(fits.at(-1).types, 1)
+})
+
+test('showing and clearing validation errors keeps the action buttons in view', () => {
+  const { elements, context, fits } = dialogHarness()
+  context.onLoad()
+  for (const { input } of types(elements)) {
+    input.checked = false
+    input.fire('change')
+  }
+  context.onAccept({ preventDefault() {} })
+  assert.equal(fits.at(-1)?.error, true, 'fit after showing the validation message')
+  const input = types(elements)[0].input
+  input.checked = true
+  input.fire('change')
+  assert.equal(fits.at(-1)?.error, false, 'fit after clearing the validation message')
 })

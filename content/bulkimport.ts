@@ -36,6 +36,7 @@ function renderExtensions(): void {
     const hint = document.createElementNS(html, 'span')
     hint.textContent = 'No files at this level. Enable Include subfolders.'
     container.appendChild(hint)
+    window.sizeToContent()
     return
   }
 
@@ -49,6 +50,7 @@ function renderExtensions(): void {
     input.addEventListener('change', () => {
       selected.set(extension, input.checked)
       element('folder-import-error').hidden = true
+      window.sizeToContent()
     })
     const name = document.createElementNS(html, 'span')
     name.textContent = extension.toUpperCase()
@@ -56,6 +58,8 @@ function renderExtensions(): void {
     label.appendChild(name)
     container.appendChild(label)
   }
+  // The recursive file list may add rows after the native window has opened.
+  window.sizeToContent()
 }
 
 export function onLoad(): void { // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -83,6 +87,7 @@ export function onAccept(event: Event): boolean { // eslint-disable-line @typesc
   const extensions = availableExtensions().filter(ext => selected.get(ext) !== false)
   if (extensions.length === 0) {
     element('folder-import-error').hidden = false
+    window.sizeToContent()
     event.preventDefault()
     return false
   }
