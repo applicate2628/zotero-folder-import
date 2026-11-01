@@ -31,7 +31,7 @@ class FolderScanner {
 
   name: string
 
-  constructor(public path: string, isRoot: boolean) {
+  constructor(public path: string, isRoot: boolean, private includeSubfolders = true) {
     log.info(`scanning ${path}`)
     this.path = path
     this.name = isRoot ? '' : PathUtils.filename(path)
@@ -41,7 +41,7 @@ class FolderScanner {
     for (const entry of (await IOUtils.getChildren(this.path))) {
       const info = await IOUtils.stat(entry)
       if (info.type === 'directory') {
-        this.folders.push(new FolderScanner(entry, false))
+        if (this.includeSubfolders) this.folders.push(new FolderScanner(entry, false, true))
       }
       else {
         log.info(`${this.path}: file ${JSON.stringify(entry)}`)
@@ -277,8 +277,11 @@ export class $FolderImport {
     const folder = await (new FilePickerHelper(`${Zotero.getString('fileInterface.import')} Folder`, 'folder')).open()
     if (!folder) return
 
+    const includeSubfolders = { value: false }
+    if (!Services.prompt.confirmCheck(null, 'Folder Import', 'Include documents from nested directories?', 'Include subfolders', includeSubfolders)) return
+
     Zotero.showZoteroPaneProgressMeter('Scanning for attachments...')
-    const root = new FolderScanner(folder, true)
+    const root = new FolderScanner(folder, true, includeSubfolders.value)
     await root.scan()
     Zotero.hideZoteroPaneOverlays()
 
