@@ -58,10 +58,21 @@ class FolderScanner {
     log.info(`scanned ${this.path}: ${JSON.stringify(Array.from(this.extensions))}`)
   }
 
-  public selected(extensions) {
-    let selected = this.files.filter(f => extensions.has(this.extension(f))).length
-    for (const folder of this.folders) {
-      selected += folder.selected(extensions)
+  public directExtensions(): Set<string> {
+    const extensions = new Set<string>()
+    for (const file of this.files) {
+      const ext = this.extension(file)
+      if (ext && ext !== 'lnk') extensions.add(ext)
+    }
+    return extensions
+  }
+
+  public selected(extensions: Set<string>, includeSubfolders = this.includeSubfolders): number {
+    let selected = this.files.filter(f => extensions.has(this.extension(f) as string)).length
+    if (includeSubfolders) {
+      for (const folder of this.folders) {
+        selected += folder.selected(extensions)
+      }
     }
     return selected
   }
@@ -136,8 +147,10 @@ class FolderScanner {
       params.progress.update()
     }
 
-    for (const folder of this.folders) {
-      await folder.import(params, collection, pdfs, duplicates)
+    if (params.includeSubfolders) {
+      for (const folder of this.folders) {
+        await folder.import(params, collection, pdfs, duplicates)
+      }
     }
   }
 
@@ -277,11 +290,8 @@ export class $FolderImport {
     const folder = await (new FilePickerHelper(`${Zotero.getString('fileInterface.import')} Folder`, 'folder')).open()
     if (!folder) return
 
-    const includeSubfolders = { value: false }
-    if (!Services.prompt.confirmCheck(null, 'Folder Import', 'Include documents from nested directories?', 'Include subfolders', includeSubfolders)) return
-
     Zotero.showZoteroPaneProgressMeter('Scanning for attachments...')
-    const root = new FolderScanner(folder, true, includeSubfolders.value)
+    const root = new FolderScanner(folder, true, true)
     await root.scan()
     Zotero.hideZoteroPaneOverlays()
 
@@ -290,52 +300,53 @@ export class $FolderImport {
     log.debug(`scan complete: ${JSON.stringify(Array.from(root.extensions))} (${root.extensions.size})`)
     if (root.extensions.size) {
       const collectionTreeRow = zoteroPane.getCollectionTreeRow()
+      const canLink = !collectionTreeRow.isWithinGroup() && !collectionTreeRow.isPublications()
+      const options = {
+        allExtensions: [...root.extensions].sort(),
+        rootExtensions: [...root.directExtensions()].sort(),
+        extensions: new Set(root.extensions),
+        canLink,
+        link: canLink,
+        includeSubfolders: false,
+        confirmed: false,
+      }
+
+      try {
+        Zotero.getMainWindow().openDialog(
+          'chrome://zotero-folder-import/content/bulkimport.xul',
+          '',
+          'chrome,centerscreen,modal,resizable=no',
+          options,
+        )
+      }
+      catch (error) {
+        log.error(error)
+        Services.prompt.alert(null, 'Folder Import', 'Could not open the import options dialog.')
+        return
+      }
+      if (!options.confirmed || options.extensions.size === 0) return
+
       const params = {
-        link: !collectionTreeRow.isWithinGroup() && !collectionTreeRow.isPublications(),
-        extensions: root.extensions,
+        link: options.link,
+        includeSubfolders: options.includeSubfolders,
+        extensions: options.extensions,
         libraryID: collectionTreeRow.ref.libraryID,
         progress: this,
-      } // TODO: warn for .lnk files when params.link === false
-
-      log.debug('opening selector')
-      const defaults = {
-        selected: [...root.extensions].sort().join(', '),
-        link: !!params.link,
       }
 
-      /*
-      const window = Zotero.getMainWindow()
-      window.openDialog('chrome://zotero-folder-import/content/wizard.xhtml', '', 'chrome,dialog,centerscreen,modal', {
-        extensions: [...root.extensions],
-        defaults: {
-          pdf: 'attach',
-          bib: 'import',
-        },
-      })
-      */
-
-      do {
-        const selected = { value: defaults.selected }
-        const link = { value: defaults.link }
-        if (!Services.prompt.prompt(null, 'File extensions', 'File extensions to import', selected, 'Link instead of import', link)) return
-        log.debug({ selected, link })
-        params.extensions = new Set(selected.value.split(',').map(_ => _.trim()).filter(_ => _))
-        params.link = link.value
-      }
-      while ([...params.extensions].find(ext => !root.extensions.has(ext)))
-      log.debug('selected:', Array.from(params.extensions))
-
-      if (params.extensions.size) {
-        const pdfs = []
-        Zotero.showZoteroPaneProgressMeter('Importing attachments...', true)
-        this.status = { total: root.selected(params.extensions), done: 0 }
+      const pdfs = []
+      Zotero.showZoteroPaneProgressMeter('Importing attachments...', true)
+      this.status = { total: root.selected(params.extensions, params.includeSubfolders), done: 0 }
+      try {
         await root.import(params, zoteroPane.getSelectedCollection(), pdfs, new Set(await this.duplicates(folder)))
+      }
+      finally {
         Zotero.hideZoteroPaneOverlays()
-        if (pdfs.length) {
-          Zotero.showZoteroPaneProgressMeter('Fetching metadata for attachments...')
-          Zotero.RecognizeDocument.autoRecognizeItems(pdfs)
-          Zotero.hideZoteroPaneOverlays()
-        }
+      }
+      if (pdfs.length) {
+        Zotero.showZoteroPaneProgressMeter('Fetching metadata for attachments...')
+        Zotero.RecognizeDocument.autoRecognizeItems(pdfs)
+        Zotero.hideZoteroPaneOverlays()
       }
     }
   }

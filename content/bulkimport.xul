@@ -1,44 +1,55 @@
-<?xml version="1.0"?>
-<!DOCTYPE window SYSTEM "chrome://zotero-better-bibtex/locale/zotero-better-bibtex.dtd">
-<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
-<?xml-stylesheet href="chrome://zotero-folder-import/skin/overlay.css" type="text/css"?>
-<dialog xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" xmlns:html="http://www.w3.org/1999/xhtml"
-  title="Add Files from Folder…"
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<dialog
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  id="folder-import-options-dialog"
+  title="Import files from folder"
+  width="520"
   buttons="accept,cancel"
-  onload="onLoad();"
-  ondialogaccept="return onAccept();"
-  ondialogcancel="return onCancel();"
-  >
+  buttonlabelaccept="Import"
+  buttonlabelcancel="Cancel"
+  onload="onLoad()"
+  ondialogaccept="return onAccept(event)"
+  ondialogcancel="return onCancel()"
+>
+  <html:div style="padding: 16px 20px 12px; min-width: 450px; color: var(--fill-primary, inherit); font: menu;">
+    <html:div style="font-size: 16px; font-weight: 650; margin-bottom: 4px;">Import folder</html:div>
+    <html:div style="font-size: 12px; color: var(--fill-secondary, #747474); margin-bottom: 16px;">
+      Choose which files to add to the selected Zotero collection.
+    </html:div>
 
-  <html:select multiple="multiple" size="10" id="folder-import-extensions">
-  </html:select>
-  <script>
-    //<![CDATA[
-    function toggle(event, option) {
-      if (option.getAttribute('selected')) {
-        option.removeAttribute('selected')
-        option.selected = false
-      }
-      else {
-        option.setAttribute('selected', 'selected')
-        option.selected = true
-      }
-      event.preventDefault()
-    }
+    <html:div style="font-weight: 600; margin-bottom: 8px;">File types</html:div>
+    <html:div
+      id="folder-import-extensions"
+      style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; padding: 12px; max-height: 160px; overflow-y: auto; border: 1px solid var(--fill-quaternary, #c5c5c5); border-radius: 7px;"
+    ></html:div>
 
-    const select = document.getElementById('folder-import-extensions')
-    select.addEventListener('mousedown', event => toggle(event, event.target))
-    select.addEventListener('keydown', event => {
-      if (select.selectedIndex >= 0 && event.keyCode === 32) toggle(event, select.options[select.selectedIndex])
-    })
-    //]]>
-  </script>
+    <html:label for="folder-import-include-subfolders"
+      style="display: flex; align-items: center; gap: 9px; margin: 16px 0; cursor: pointer;">
+      <html:input id="folder-import-include-subfolders" type="checkbox" />
+      <html:span>Include subfolders</html:span>
+    </html:label>
 
-  <radiogroup id="folder-import-link-or-import">
-    <radio id="folder-import-link" label="Link to files" value="link"/>
-    <radio id="folder-import-import" label="Store copy of files" value="store"/>
-  </radiogroup>
-  <checkbox id="item-import" label="Import items"/>
-
-  <script src="bulkimport.js"/>
+    <html:div style="border-top: 1px solid var(--fill-quaternary, #c5c5c5); padding-top: 14px;">
+      <html:div style="font-weight: 600; margin-bottom: 10px;">How to add files</html:div>
+      <html:label for="folder-import-copy"
+        style="display: flex; align-items: center; gap: 9px; margin-bottom: 10px; cursor: pointer;">
+        <html:input id="folder-import-copy" type="radio" name="folder-import-mode" value="copy" />
+        <html:span>Store a copy in Zotero</html:span>
+      </html:label>
+      <html:label for="folder-import-link"
+        style="display: flex; align-items: center; gap: 9px; cursor: pointer;">
+        <html:input id="folder-import-link" type="radio" name="folder-import-mode" value="link" />
+        <html:span>Link to original files</html:span>
+      </html:label>
+    </html:div>
+    <html:div
+      id="folder-import-error"
+      hidden="hidden"
+      role="alert"
+      style="margin-top: 12px; font-size: 12px; color: #b34141;"
+    >Select at least one file type to continue.</html:div>
+  </html:div>
+  <script src="chrome://zotero-folder-import/content/bulkimport.js"></script>
 </dialog>

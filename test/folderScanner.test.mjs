@@ -27,9 +27,32 @@ function scannerFor(includeSubfolders) {
     },
     PathUtils: { filename: path => path.slice(path.lastIndexOf('/') + 1) },
     log: { info() {} },
+    sleep: async () => {},
+  }
+  const imports = []
+  const created = []
+  class Collection {
+    constructor() {
+      this.id = created.length + 1
+      this.key = 'collection-' + this.id
+    }
+    getChildCollections() { return [] }
+    async saveTx() { created.push(this) }
+    async loadAllData() {}
+  }
+  context.Zotero = {
+    Collection,
+    Collections: { getByLibrary: () => [] },
+    Attachments: {
+      importFromFile: async ({ file }) => { imports.push(file); return { file } },
+      linkFromFile: async ({ file }) => { imports.push(file); return { file } },
+    },
   }
   vm.runInNewContext(scannerJs, context)
-  return new context.FolderScannerForTests('/root', true, includeSubfolders)
+  const scanner = new context.FolderScannerForTests('/root', true, includeSubfolders)
+  scanner.testImports = imports
+  scanner.testCollections = created
+  return scanner
 }
 
 test('when checkbox is clear, only root files are scanned and counted', async () => {
@@ -47,8 +70,48 @@ test('when checkbox is checked, nested PDFs are included exactly once', async ()
   assert.equal(scanner.folders[0].folders.length, 1)
 })
 
-test('the import UI exposes a real checkbox with an unchecked default', () => {
-  assert.match(source, /Services\.prompt\.confirmCheck\(/)
-  assert.match(source, /'Include subfolders'/)
-  assert.match(source, /const includeSubfolders = \{ value: false \}/)
+test('the import UI exposes one native dialog with a checkbox defaulting off', () => {
+  const markup = readFileSync(new URL('../content/bulkimport.xul', import.meta.url), 'utf8')
+  assert.match(source, /openDialog\(/)
+  assert.match(source, /includeSubfolders: false/)
+  assert.match(markup, /id="folder-import-include-subfolders"/)
+})
+
+test('import without recursion writes only the top-level document', async () => {
+  const scanner = scannerFor(true)
+  await scanner.scan()
+  const params = {
+    extensions: new Set(['pdf']),
+    link: false,
+    includeSubfolders: false,
+    libraryID: 1,
+    progress: { update() {} },
+  }
+  assert.equal(scanner.selected(params.extensions, false), 1)
+  await scanner.import(params, null, [], new Set())
+  assert.deepEqual(scanner.testImports, ['/root/article.pdf'])
+  assert.equal(scanner.testCollections.length, 0)
+})
+
+test('recursive import preserves nested collection hierarchy', async () => {
+  const scanner = scannerFor(true)
+  await scanner.scan()
+  const params = {
+    extensions: new Set(['pdf']),
+    link: false,
+    includeSubfolders: true,
+    libraryID: 1,
+    progress: { update() {} },
+  }
+  assert.equal(scanner.selected(params.extensions, true), 3)
+  await scanner.import(params, null, [], new Set())
+  assert.deepEqual(scanner.testImports, [
+    '/root/article.pdf',
+    '/root/sub/notes.pdf',
+    '/root/sub/nested/research.pdf',
+  ])
+  assert.deepEqual(scanner.testCollections.map(item => [item.name, item.parentKey]), [
+    ['sub', undefined],
+    ['nested', 'collection-1'],
+  ])
 })
