@@ -5,7 +5,7 @@ import vm from 'node:vm'
 import { transformSync } from 'esbuild'
 
 const source = readFileSync(new URL('../content/folder-import.ts', import.meta.url), 'utf8')
-const start = source.indexOf('class FolderScanner {')
+const start = source.indexOf('function fileSystemPath(')
 const end = source.indexOf('export class $FolderImport', start)
 assert.ok(start >= 0 && end > start, 'locate the actual FolderScanner implementation')
 
@@ -25,7 +25,7 @@ function scannerFor(includeSubfolders) {
       getChildren: async path => contents.get(path) ?? [],
       stat: async path => ({ type: contents.has(path) ? 'directory' : 'regular' }),
     },
-    PathUtils: { filename: path => path.slice(path.lastIndexOf('/') + 1) },
+    PathUtils: { filename: path => path.slice(path.lastIndexOf('/') + 1), join: (root, name) => root + '/' + name },
     log: { info() {} },
     sleep: async () => {},
   }

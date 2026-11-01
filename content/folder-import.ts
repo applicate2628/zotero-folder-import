@@ -24,6 +24,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Gecko IOUtils.stat can report existing Windows paths >= 260 characters as missing.
+// Keep ordinary paths in the scan tree; use extended syntax only at filesystem boundaries.
+function fileSystemPath(path: string): string {
+  if (!Zotero.isWin || path.length < 260 || path.startsWith('\\\\?\\')) return path
+  if (/^[a-z]:\\/i.test(path)) return '\\\\?\\' + path
+  if (path.startsWith('\\\\') && !path.startsWith('\\\\.\\')) return '\\\\?\\UNC\\' + path.slice(2)
+  return path
+}
+
 class FolderScanner {
   files: string[] = []
   folders: FolderScanner[] = []
@@ -38,8 +47,9 @@ class FolderScanner {
   }
 
   public async scan() {
-    for (const entry of (await IOUtils.getChildren(this.path))) {
-      const info = await IOUtils.stat(entry)
+    for (const child of (await IOUtils.getChildren(fileSystemPath(this.path)))) {
+      const entry = PathUtils.join(this.path, PathUtils.filename(child))
+      const info = await IOUtils.stat(fileSystemPath(entry))
       if (info.type === 'directory') {
         if (this.includeSubfolders) this.folders.push(new FolderScanner(entry, false, true))
       }
@@ -51,8 +61,9 @@ class FolderScanner {
       }
     }
 
-    await Promise.all(this.folders.map(dir => dir.scan()))
+    // Sequential traversal leaves no sibling scan running after an error.
     for (const dir of this.folders) {
+      await dir.scan()
       this.extensions = new Set([...this.extensions, ...dir.extensions])
     }
     log.info(`scanned ${this.path}: ${JSON.stringify(Array.from(this.extensions))}`)
@@ -120,7 +131,7 @@ class FolderScanner {
         if (params.link) {
           log.info(`linking ${file} into ${collection ? collection.name : '<root>'}`)
           const item = await Zotero.Attachments.linkFromFile({
-            file,
+            file: fileSystemPath(file),
             parentItemID: false,
             collections: collection ? [collection.id] : undefined,
           })
@@ -132,7 +143,7 @@ class FolderScanner {
         else {
           log.info(`importing ${file} into ${collection ? collection.name : '<root>'}`)
           const item = await Zotero.Attachments.importFromFile({
-            file,
+            file: fileSystemPath(file),
             libraryID: params.libraryID,
             collections: collection ? [collection.id] : undefined,
           })
@@ -292,8 +303,21 @@ export class $FolderImport {
 
     Zotero.showZoteroPaneProgressMeter('Scanning for attachments...')
     const root = new FolderScanner(folder, true, true)
-    await root.scan()
-    Zotero.hideZoteroPaneOverlays()
+    let scanError: unknown = null
+    try {
+      await root.scan()
+    }
+    catch (error) {
+      scanError = error
+      log.error(error)
+    }
+    finally {
+      Zotero.hideZoteroPaneOverlays()
+    }
+    if (scanError) {
+      Services.prompt.alert(null, 'Folder Import', `Could not scan the selected folder.\n\n${String(scanError)}`)
+      return
+    }
 
     // Zotero.Translators.getAllForType('import')
 
